@@ -10,6 +10,7 @@ const ESLintPlugin = require('eslint-webpack-plugin')
 const Dotenv = require('dotenv-webpack')
 const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin
 const webpack = require('webpack')
+const crypto = require('crypto')
 
 // Cái dòng này giúp Editor gợi ý được các giá trị cho dòng code config ngay phía dưới nó
 // (giống như đang dùng Typescript vậy đó 😉)
@@ -21,7 +22,6 @@ module.exports = (env, argv) => {
   const config = {
     // Quy định cách webpack giải quyết các file
     resolve: {
-      
       // Giải quyết các file theo thứ tự ưu tiên từ trái sang phải nếu import
       // các file cùng một tên nhưng các đuôi mở rộng
       extensions: ['.tsx', '.ts', '.jsx', '.js']
@@ -37,16 +37,46 @@ module.exports = (env, argv) => {
           use: ['babel-loader'] // Giúp dịch code TS, React sang JS,
         },
         {
-          test: /\.(s[ac]ss|css)$/, // duyệt các file sass || scss || css
+          test: /\.(s[ac]ss|css)$/, // for regular .scss files
+          exclude: /\.module\.scss$/, // exclude .module.scss files
+          use: [
+            MiniCssExtractPlugin.loader,
+            'css-loader',
+            'sass-loader',
+            {
+              loader: 'sass-resources-loader',
+              options: {
+                resources: './src/variable.scss' // replace with your actual path
+              }
+            }
+          ]
+        },
+        {
+          test: /\.module\.scss$/, // duyệt các file sass || scss || css
           use: [
             MiniCssExtractPlugin.loader,
             {
               loader: 'css-loader', // dùng import 'filename.css' trong file tsx, ts
-              options: { sourceMap: !isProduction } // Hiển thị sourcemap ở môi trường dev cho dễ debug
+              options: {
+                sourceMap: !isProduction,
+                modules: {
+                  getLocalIdent: (context) => {
+                    const name = context.resourcePath.split('\\')?.[context.resourcePath.split('\\').length - 2]
+                    const hash = crypto.createHash('md5').update(context.resourcePath).digest('base64').substring(0, 5)
+                    return [name, hash].join('_')
+                  }
+                }
+              } // Hiển thị sourcemap ở môi trường dev cho dễ debug
             },
             {
               loader: 'sass-loader', // biên dịch sass sang css
               options: { sourceMap: !isProduction }
+            },
+            {
+              loader: 'sass-resources-loader',
+              options: {
+                resources: './src/variable.scss' // replace with your actual path
+              }
             }
           ]
         },
@@ -78,7 +108,7 @@ module.exports = (env, argv) => {
     output: {
       filename: 'static/js/main.[contenthash:6].js', // Thêm mã hash tên file dựa vào content để tránh bị cache bởi CDN hay browser.
       path: path.resolve(__dirname, 'dist'), // Build ra thư mục dist
-      publicPath: '/'
+      publicPath: './'
     },
     devServer: {
       hot: true, // enable Hot Module Replacement, kiểu như reload nhanh
